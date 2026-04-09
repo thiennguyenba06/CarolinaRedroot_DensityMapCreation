@@ -1,0 +1,79 @@
+import cv2, re, numpy as np, math, os, PIL.Image as Image, shutil, ultralytics
+import xmp_module
+
+exif_data = {}
+
+def get_frames(path, perframe):
+    idxes = []
+    try:
+        vid = cv2.VideoCapture(path)
+        width, height = int(vid.get(cv2.CAP_PROP_FRAME_WIDTH)), int(vid.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        exif_data["Exif.Photo.PixelXDimension"] = width
+        exif_data["Exif.Photo.PixelYDimension"] = height
+    except:
+        raise Exception("Video path is invalid")
+    count, success = 0, True
+    frames_list = []
+    while success:
+        success = vid.grab() # Read frame
+        if success:
+            if count % perframe == 0:
+                print(f"image frame {count}")
+                idxes.append(count)
+                success, image = vid.retrieve()
+                image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+                pil_img = Image.fromarray(image)
+                frames_list.append(pil_img)
+            count += 1
+    vid.release()
+    return frames_list, idxes
+
+# dict keys = LONGITUDE, LATITUDE, REL_ALT, ABS_ALT
+def srt_list(srt_path):
+    with open(srt_path, "r") as srt_file:
+        frames_list = [frames.split("\n") for frames in srt_file.read().strip().split("\n\n")]
+        for frame in frames_list:
+            # print(frame[4])
+            new_dict = {}
+            # for gpsinfo in re.findall(r'\w+:\s-?\d.?\d*', frame[4]):
+            for gpsinfo in re.findall(r'\w+:\s-?\d+\.?\d*', frame[4]):
+                key, value = gpsinfo.split(":")
+                # print(f"key: {key}, value: {value}")
+                if "/" in value:
+                    num, denom = value.split("/")
+                    new_dict[key.upper()] = float(num.strip()) / float(denom.strip())
+                elif "]" in value:
+                    value = value.split("]")
+                    # print(f"value: {value}")
+                    new_dict[key.upper()] = float(value[0].strip())
+                else:
+                    new_dict[key.upper()] = float(value.strip())
+            frame[4] = new_dict
+        return frames_list
+
+if __name__ == "__main__":
+    parent_dir = "."
+    data_dir = os.path.join(parent_dir, "DJI_202507011226_138_Pinelslandbog9H3m3xOvideo")
+    video_path = os.path.join(data_dir, "DJI_20250701122911_0001_D_Waypoint1.MP4")
+    srt_path = os.path.join(data_dir, "DJI_20250701122911_0001_D_Waypoint1.SRT")
+    output_dir = os.path.join(parent_dir, "geotagged_frames")
+    os.makedirs(output_dir, exist_ok=True)
+
+
+    frames_list, idxes = get_frames(video_path, 30)
+    srts = srt_list(srt_path) # geotagged info
+    print("done creating frames and srt list")
+    print("writing to files...")
+    counter = 1
+    for idx, img_obj in zip(idxes, frames_list):
+        print(f"frame {counter}")
+        srt_obj = srts[idx]
+        print(srt_obj[4]["GB_PITCH"])
+        img_path = os.path.join(output_dir, f"frame_{counter}.jpg")
+        if -90 <= float(srt_obj[4]["GB_PITCH"]) <= -50:
+            img_obj.save(img_path, "JPEG")
+            xmp_meta = srt_obj[4]
+            xmp_module.write_xmp_exif(img_path, xmp_meta, exif_data)
+            print(f"done writng frame {counter}")
+            counter += 1
+    print("done writing to files")
