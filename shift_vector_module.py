@@ -3,9 +3,9 @@ import pixel_to_gps
 
 
 
-def calculate_shift_vector(PARENT_DIR, corner_folder_dir):     
-    corners_file_list = sorted(os.listdir(os.path.join(PARENT_DIR, corner_folder_dir)))
-    corners_file_list = [f for f in corners_file_list if f.lower().endswith(('jpg', '.jpeg', '.png'))]
+def calculate_projection_error_vector(PARENT_DIR, corner_folder_dir):     
+    corners_files = sorted(os.listdir(os.path.join(PARENT_DIR, corner_folder_dir)))
+    corners_file_list = [f for f in corners_files if f.lower().endswith(('jpg', '.jpeg', '.png'))]
     origin_path = os.path.join(PARENT_DIR, corner_folder_dir, corners_file_list[0])
     # actual gps of corners
     corner_dict = {} # corner_1: (lat, lon), corner_2: (lat, lon), ... corner_4: (lat, lon)
@@ -22,12 +22,37 @@ def calculate_shift_vector(PARENT_DIR, corner_folder_dir):
         name = f"corner{i+1}"
         img_path = os.path.join(PARENT_DIR, corner_folder_dir, img)
         exif = pyexiv2.Image(img_path).read_exif()
-        center_cor = [float(exif['Exif.Photo.PixelXDimension'])/2, float(exif['Exif.Photo.PixelYDimension'])/2 - 1450]
+        center_cor = [float(exif['Exif.Photo.PixelXDimension'])/2, float(exif['Exif.Photo.PixelYDimension'])/2]
         gps = pixel_to_gps.get_gps(origin_path, img_path, center_cor)
         delta_gps = [gps[0] - corner_dict[name][0], gps[1] - corner_dict[name][1]]
+        print(f"Delta GPS for {name}: {delta_gps}")
         delta_gps_vector.append(delta_gps)
 
     return np.mean(np.array(delta_gps_vector), axis=0) * -1
 
 
 
+def calculate_shift_vector(PARENT_DIR, corner_folder_dir, actual_corners_vector):
+    corner_coors_path = [f for f in os.listdir(os.path.join(PARENT_DIR, corner_folder_dir)) if f.endswith(".txt")][0]
+    corner_coors_path = os.path.join(PARENT_DIR, corner_folder_dir, corner_coors_path)
+    corners_vector = []
+    with open(corner_coors_path, "r") as file:
+        counter = 1
+        for line in file:
+            string = line.strip().split(",")
+            corner = [float(string[0]), float(string[1])]
+            corners_vector.append(corner)
+    file.close()
+    corners_vector = np.array(corners_vector)
+    error_vector = actual_corners_vector - corners_vector
+    # print(error_vector)
+    return np.mean(error_vector, axis=0)
+    
+
+if __name__ == "__main__":
+    PARENT_DIR = "."
+    CORNER_FOLDER = "4_corners"
+    a = [[39.741633,-74.526192], [39.742623,-74.525837], [39.742997,-74.527282], [39.741752,-74.527700]]
+    a = np.array(a)
+    # print(a)
+    calculate_shift_vector(PARENT_DIR=PARENT_DIR, corner_folder_dir=CORNER_FOLDER, actual_corners_vector=a)

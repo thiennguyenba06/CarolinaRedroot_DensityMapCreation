@@ -1,5 +1,6 @@
 import cv2, re, numpy as np, math, os, PIL.Image as Image, shutil, ultralytics
 import xmp_module
+from concurrent.futures import ProcessPoolExecutor
 
 exif_data = {}
 
@@ -25,8 +26,8 @@ def get_frames(path, perframe):
                 pil_img = Image.fromarray(image)
                 frames_list.append(pil_img)
             count += 1
-    vid.release()
-    return frames_list, idxes
+    vid.release() 
+    return frames_list, idxes 
 
 # dict keys = LONGITUDE, LATITUDE, REL_ALT, ABS_ALT
 def srt_list(srt_path):
@@ -50,30 +51,68 @@ def srt_list(srt_path):
                     new_dict[key.upper()] = float(value.strip())
             frame[4] = new_dict
         return frames_list
+    
+
+def process_video(video_path, srt_path, per_frame, output_dir, counter_start):
+    exif_data = {}
+    srts = srt_list(srt_path=srt_path)
+    try:
+        vid = cv2.VideoCapture(video_path)
+        width, height = int(vid.get(cv2.CAP_PROP_FRAME_WIDTH)), int(vid.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        exif_data["Exif.Photo.PixelXDimension"] = width
+        exif_data["Exif.Photo.PixelYDimension"] = height
+    except:
+        raise Exception("Video path is invalid")
+    count = 0
+    frame_counter = counter_start
+
+    while True:
+        success = vid.grab()
+        if not success: 
+            break
+        if count % per_frame == 0:
+            success, image = vid.retrieve()
+            srt_obj = srts[count]
+            pitch = float(srt_obj[4].get("GB_PITCH", 0))
+            if -90 <= pitch <= -50:
+                img_path = os.path.join(output_dir, f"frame_{frame_counter}.jpg")
+                cv2.imwrite(img_path, image, [int(cv2.IMWRITE_JPEG_QUALITY), 95])
+                xmp_meta = srt_obj[4]
+                xmp_module.write_xmp_exif(img_path, xmp_meta, exif_data)
+                print(f"done writng frame {frame_counter}")
+                frame_counter += 1
+        count += 1
+    return frame_counter
+
+
+            
+
 
 if __name__ == "__main__":
     parent_dir = "."
-    data_dir = os.path.join(parent_dir, "DJI_202507011226_138_Pinelslandbog9H3m3xOvideo")
-    video_path = os.path.join(data_dir, "DJI_20250701122911_0001_D_Waypoint1.MP4")
-    srt_path = os.path.join(data_dir, "DJI_20250701122911_0001_D_Waypoint1.SRT")
-    output_dir = os.path.join(parent_dir, "geotagged_frames")
+    data_dir = os.path.join(parent_dir, "DJI_202507011226_138_PineIslandbog9H3m3x0video")
+    video_file_list = sorted([f for f in os.listdir(data_dir) if f.endswith(".MP4")])
+    srt_file_list = sorted([f for f in os.listdir(data_dir) if f.endswith(".SRT")])
+
+
+    output_dir = os.path.join(parent_dir, "geotagged_frames2")
     os.makedirs(output_dir, exist_ok=True)
 
+    current_frame_counter = 1
+    for i, (video_file, srt_file) in enumerate(zip(video_file_list, srt_file_list), start=1):
+        print(f"processing batch {i}")
+        video_path = os.path.join(parent_dir, data_dir, video_file)
+        srt_path = os.path.join(parent_dir, data_dir, srt_file)
 
-    frames_list, idxes = get_frames(video_path, 30)
-    srts = srt_list(srt_path) # geotagged info
-    print("done creating frames and srt list")
-    print("writing to files...")
-    counter = 1
-    for idx, img_obj in zip(idxes, frames_list):
-        print(f"frame {counter}")
-        srt_obj = srts[idx]
-        print(srt_obj[4]["GB_PITCH"])
-        img_path = os.path.join(output_dir, f"frame_{counter}.jpg")
-        if -90 <= float(srt_obj[4]["GB_PITCH"]) <= -50:
-            img_obj.save(img_path, "JPEG")
-            xmp_meta = srt_obj[4]
-            xmp_module.write_xmp_exif(img_path, xmp_meta, exif_data)
-            print(f"done writng frame {counter}")
-            counter += 1
-    print("done writing to files")
+        current_frame_counter = process_video(
+            video_path=video_path,
+            srt_path=srt_path,
+            per_frame=15,
+            output_dir=output_dir,
+            counter_start=current_frame_counter
+        )
+
+    print(f"done extracting from video streams")
+
+
+    

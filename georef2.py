@@ -69,7 +69,7 @@ def get_drone_coor(lat1, lon1, lat2, lon2, yaw_angle):
     return: x, y coordinates in meters relative to origin point
     refer to notes for rotation matrix derivation
     """
-    R = 6371000
+    R = 6378137.0
     delta_lat, delta_lon = lat2 - lat1, lon2 - lon1
     x = np.radians(delta_lon) * R * np.cos(np.radians(lat1))
     y = np.radians(delta_lat) * R

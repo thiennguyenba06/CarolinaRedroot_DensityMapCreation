@@ -46,6 +46,7 @@ def get_gps(origin_path, img_path, pixel_coor):
 
     # get current drone x, y from origin in meters
     drone_from_origin_cartesian = georef2.get_drone_coor(origin[0], origin[1], current[0], current[1], yaw)
+    
 
     # map the pixel_coor to drone with origin as basis, unit meter
     x_meter, y_meter = pixel_cartesian[0] + drone_from_origin_cartesian[0], pixel_cartesian[1] + drone_from_origin_cartesian[1]

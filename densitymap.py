@@ -8,11 +8,11 @@ ORIGIN_PATH = "/Users/thiennguyenba/Documents/School/Research/Density_Video/geot
 IMG_DIR = "geotagged_frames"
 LABEL_DIR = "output"
 
-# SHIFT_VECTOR = np.array([-1.68998787e-05, 6.04827686e-06]) # subject to change
-SHIFT_VECTOR = shift_vector_module.calculate_shift_vector(PARENT_DIR="./", corner_folder_dir="4_corners")
-# SHIFT_VECTOR = np.array([0, 0])
-THRESHOLD = 20 # subject to change
+actual_corners_coors = [[39.741628,-74.526137], [39.742635,-74.525822], [39.742924,-74.527282], [39.741754,-74.527672]] # obtain this from google earth
+actual_corners_coors = np.array(actual_corners_coors)
+SHIFT_VECTOR = shift_vector_module.calculate_shift_vector(PARENT_DIR="./", corner_folder_dir="4_corners", actual_corners_vector=actual_corners_coors)
 
+THRESHOLD = 20 # subject to change
 CSV_OUTPUT = "density_by_gps.csv"
 
 
@@ -176,6 +176,7 @@ if __name__ == "__main__":
                 if distance_to_centroid <= min_distance:
                     chosen_img = img_id
                     min_distance = distance_to_centroid 
+                    
                             
             if chosen_img is not None:
                 points = detections[chosen_img]

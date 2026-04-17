@@ -89,7 +89,7 @@ if __name__ == "__main__":
 
     # for timing purposes
     parent_directory = "./"
-    image_folder_dir = "geotagged_frames"
+    image_folder_dir = "geotagged_frames2"
     weight_path = "best.pt"
     
     # model = ultralytics.YOLO(os.path.join(parent_directory, weight_path))
