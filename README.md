@@ -27,7 +27,7 @@ data_dir = "YOUR VIDEO FOLDER DIRECTORY"
 ```
 Run `split_predict.py` to do inference on extracted images\
 
-# Create density map
+## Create density map
 Run `densitymap.py` to create density map
 ### setting up paths and constants
 ```bash
