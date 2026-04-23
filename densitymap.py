@@ -1,5 +1,6 @@
 import georef2, shift_vector_module
 import numpy as np, pyexiv2, os, csv
+import matplotlib.pyplot as plt
 from shapely import Polygon, box, Point, STRtree, distance
 from concurrent.futures import ProcessPoolExecutor
 
@@ -7,13 +8,22 @@ from concurrent.futures import ProcessPoolExecutor
 ORIGIN_PATH = "/Users/thiennguyenba/Documents/School/Research/Density_Video/geotagged_frames/frame_1.jpg" # to be changed depending on dataset
 IMG_DIR = "geotagged_frames"
 LABEL_DIR = "output"
+CORNER_GPS_PATH = "/Users/thiennguyenba/Documents/School/Research/Density_Video/bog_calibration/bog9_calibrations.txt"
 
-actual_corners_coors = [[39.741628,-74.526137], [39.742635,-74.525822], [39.742924,-74.527282], [39.741754,-74.527672]] # obtain this from google earth
+actual_corners_coors = [
+    [39.741628,-74.526122], 
+    [39.742633,-74.525784], 
+    [39.742924,-74.527282], 
+    [39.741753,-74.527658]
+    ] # obtain this from google earth
 actual_corners_coors = np.array(actual_corners_coors)
-SHIFT_VECTOR = shift_vector_module.calculate_shift_vector(PARENT_DIR="./", corner_folder_dir="4_corners", actual_corners_vector=actual_corners_coors)
+SHIFT_VECTOR = shift_vector_module.calculate_shift_vector(
+    corner_coors_path=CORNER_GPS_PATH, 
+    actual_corners_vector=actual_corners_coors)
 
 THRESHOLD = 20 # subject to change
 CSV_OUTPUT = "density_by_gps.csv"
+SPRAY_COORS_CSV = "spray_location.csv"
 
 
 
@@ -21,7 +31,6 @@ CSV_OUTPUT = "density_by_gps.csv"
 # setting up constants
 SIDE_LENGTH_METERS = 1 # grid square side length in meters
 R_EARTH = 6378137.0  # Earth radius
-yaw = np.radians(90 - float(pyexiv2.Image(ORIGIN_PATH).read_xmp()['Xmp.drone-dji.FlightYawDegree']))
 origin_gps = (float(pyexiv2.Image(ORIGIN_PATH).read_xmp()['Xmp.drone-dji.GpsLatitude']), float(pyexiv2.Image(ORIGIN_PATH).read_xmp()['Xmp.drone-dji.GpsLongitude']))
 
 
@@ -46,14 +55,20 @@ def process_img(img, label):
     img_id = int(img.split("_")[1].split(".")[0])
     label_path = os.path.join(LABEL_DIR, label)
     mapped_list = georef2.georef(ORIGIN_PATH, img_path, label_path)
-    polygon = Polygon(georef2.get_image_corners(ORIGIN_PATH, img_path))
+    vertices = georef2.get_image_corners(ORIGIN_PATH, img_path)
+    polygon = Polygon(vertices)
+    lower_TL = [v*0.5 for v in vertices[0]]
+    lower_TR = [v*0.5 for v in vertices[1]] 
+    half_poly = Polygon([lower_TL, lower_TR, vertices[2], vertices[3]])
+
 
     return {
         "img": img,
         "img_id": img_id,
         "img_path": img_path,
         "mapped_list": mapped_list,
-        "polygon": polygon
+        "polygon": polygon,
+        "lower_half": half_poly
     }
 
 def meters_to_gps(lat_origin, lon_origin, dx, dy, yaw_angle):
@@ -83,7 +98,6 @@ def find_displacement(drone_gps, point_gps, yaw):
     """
     drone_lat, drone_lon = drone_gps
     point_lat, point_lon = point_gps
-    point_lat, point_lon = point_lat, point_lon 
     # Calculate delta gps
     d_lat = point_lat - drone_lat
     d_lon = point_lon - drone_lon
@@ -119,6 +133,7 @@ if __name__ == "__main__":
         all_detections_coor.extend(result["mapped_list"])
         detections[result["img_id"]] = result["mapped_list"]
         image_bounds[result["img_id"]] = result["polygon"]
+        lower_half_image_bounds[result["polygon"]] = result["lower_half"]
         img_fname_map[result["img_id"]] = result["img"]
         
     all_detections_coor = np.array(all_detections_coor) # convert list to numpy array for easier processing later
@@ -163,22 +178,57 @@ if __name__ == "__main__":
             left, right = x_lines[x_idx], x_lines[x_idx+1]
             cell_bounds = box(left, down, right, up)
             cell_center_x, cell_center_y = (left + right) / 2, (down + up) / 2
+            cell_centroid = np.array([cell_center_x, cell_center_y])
  
             possible_bounds = tree.query(cell_bounds) # 1d array of possible intersecting polygons (in any region)
 
-            # choosing best image
-            min_distance = float("inf")
             chosen_img = None
-            for idx in possible_bounds:
-                img_id = id_list[idx]
-                polygon = image_bounds[img_id]
-                distance_to_centroid = abs(distance(cell_bounds.centroid, get_lower_half_centroid(polygon)))
-                if distance_to_centroid <= min_distance:
-                    chosen_img = img_id
-                    min_distance = distance_to_centroid 
+            if len(possible_bounds) != 0:
+                # choosing best image
+                # distances =  []
+                # for idx in possible_bounds:
+                #     img_id = id_list[idx]
+                #     polygon = image_bounds[img_id]
+                #     lower_half = lower_half_image_bounds[polygon]
+                #     poly_centroid = np.array([lower_half.centroid.x, lower_half.centroid.y])
+                #     dist = np.linalg.norm(cell_centroid - poly_centroid)
+                #     contestant = [img_id, dist]
+                #     distances.append(contestant)
+
+                # distances.sort(key=lambda x:x[1])
+
+                # for (id, dist) in distances:
+                #     lower_half = lower_half_image_bounds[image_bounds[id]]
+                #     if lower_half.contains(cell_bounds):
+                #         chosen_img = id
+                #         break
+                # if chosen_img is None:
+                #     for (id, dist) in distances:
+                #         polygon = image_bounds[id]
+                #         if polygon.contains(cell_bounds):
+                #             chosen_img = id
+                #             break
+
+                # choosing best image based on iou/dist
+                max_score = 0
+                for idx in possible_bounds:
+                    img_id = id_list[idx]
+                    polygon = image_bounds[img_id]
+                    intersection = polygon.intersection(cell_bounds).area
+                    union = polygon.area + cell_bounds.area - intersection
+                    iou = intersection / union
+                    # lower_half = lower_half_image_bounds[polygon]
+                    # poly_centroid = np.array([lower_half.centroid.x, lower_half.centroid.y])
+                    # dist = np.linalg.norm(cell_centroid - poly_centroid)
+                    score = iou
+
+                    if score > max_score:
+                        chosen_img = img_id
+                        max_score = score
                     
-                            
-            if chosen_img is not None:
+                if chosen_img is None:
+                    continue
+
                 points = detections[chosen_img]
                 # print(f"{img_id}: {np.ndim(points)}")
                 if points.ndim != 2:
@@ -191,11 +241,13 @@ if __name__ == "__main__":
                 density_grid[y_idx, x_idx] = density
 
                 # map cell center to GPS 
-                gps = meters_to_gps(origin_gps[0], origin_gps[1], cell_center_x, cell_center_y, yaw)
                 xmp_data = pyexiv2.Image(os.path.join(IMG_DIR, img_fname_map[chosen_img])).read_xmp()
+                yaw = np.radians(90 - float(xmp_data.get('Xmp.drone-dji.FlightYawDegree')))
+                gps = meters_to_gps(origin_gps[0], origin_gps[1], cell_center_x, cell_center_y, yaw)
                 drone_gps = (float(xmp_data['Xmp.drone-dji.GpsLatitude']), float(xmp_data['Xmp.drone-dji.GpsLongitude']))
                 displacement = find_displacement(drone_gps=drone_gps, point_gps=gps, yaw=yaw)
                 gps_map[gps] = (density, img_fname_map[chosen_img], displacement)
+
     print("Finished density map calculation\n")
 
     # output
@@ -209,7 +261,7 @@ if __name__ == "__main__":
 
 
 
-    with open(CSV_OUTPUT, "w", newline='') as f1, open("spray_location.csv", "w", newline='') as f2:
+    with open(CSV_OUTPUT, "w", newline='') as f1, open(SPRAY_COORS_CSV, "w", newline='') as f2:
         writer1 = csv.writer(f1)
         writer2 = csv.writer(f2)
 
@@ -222,4 +274,27 @@ if __name__ == "__main__":
                 writer2.writerow([lat + SHIFT_VECTOR[0], lon + SHIFT_VECTOR[1], density, image_fname])
 
     print(f"Data saved for QGIS in {CSV_OUTPUT}")
+
+    print("Generating visual heat map...")
+    plt.figure(figsize=(12, 10))
+    img = plt.imshow(
+        density_grid, 
+        origin='lower', 
+        extent=[x_min, x_max, y_min, y_max], 
+        cmap='OrRd',
+        interpolation='bilinear'
+    )
+    
+    plt.colorbar(img, label='Detections per m²')
+    plt.xlabel('Relative X (Meters)')
+    plt.ylabel('Relative Y (Meters)')
+    plt.title(f'CR Density Heat Map')
+
+    # Save the visual plot
+    heatmap_output = "density_heatmap.png"
+    plt.savefig(heatmap_output, dpi=300, bbox_inches='tight')
+    plt.close()
+
+    print(f"Heat map saved as {heatmap_output}")
+
     print("Done.")

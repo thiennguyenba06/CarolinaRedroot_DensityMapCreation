@@ -87,7 +87,6 @@ def get_detections_coor(img_path, detections_path):
     return: list of (x,y) coordinates in meters relative to drone position
     """
     img = pyexiv2.Image(img_path)
-    yaw = np.radians(90 - float(img.read_xmp()['Xmp.drone-dji.FlightYawDegree']))
     pitch = np.radians(float(img.read_xmp()['Xmp.drone-dji.GimbalPitchDegree']))
     # print("pitch:", pitch)
     altitude = float(img.read_xmp()['Xmp.drone-dji.RelativeAltitude']) + 1

@@ -74,7 +74,7 @@ def process_video(video_path, srt_path, per_frame, output_dir, counter_start):
             success, image = vid.retrieve()
             srt_obj = srts[count]
             pitch = float(srt_obj[4].get("GB_PITCH", 0))
-            if -90 <= pitch <= -50:
+            if -89 < pitch < -50:
                 img_path = os.path.join(output_dir, f"frame_{frame_counter}.jpg")
                 cv2.imwrite(img_path, image, [int(cv2.IMWRITE_JPEG_QUALITY), 95])
                 xmp_meta = srt_obj[4]
@@ -89,20 +89,23 @@ def process_video(video_path, srt_path, per_frame, output_dir, counter_start):
 
 
 if __name__ == "__main__":
-    parent_dir = "."
+    parent_dir = "./" # set to this directory, can be changed if needed
+    data_dir = "YOUR VIDEO FOLDER DIRECTORY"
     data_dir = os.path.join(parent_dir, "DJI_202507011226_138_PineIslandbog9H3m3x0video")
     video_file_list = sorted([f for f in os.listdir(data_dir) if f.endswith(".MP4")])
     srt_file_list = sorted([f for f in os.listdir(data_dir) if f.endswith(".SRT")])
+    for video, srt in zip(video_file_list, srt_file_list):
+        print(video, srt)
 
 
-    output_dir = os.path.join(parent_dir, "geotagged_frames2")
+    output_dir = os.path.join(parent_dir, "geotagged_frames")
     os.makedirs(output_dir, exist_ok=True)
 
     current_frame_counter = 1
     for i, (video_file, srt_file) in enumerate(zip(video_file_list, srt_file_list), start=1):
         print(f"processing batch {i}")
-        video_path = os.path.join(parent_dir, data_dir, video_file)
-        srt_path = os.path.join(parent_dir, data_dir, srt_file)
+        video_path = os.path.join(data_dir, video_file)
+        srt_path = os.path.join(data_dir, srt_file)
 
         current_frame_counter = process_video(
             video_path=video_path,

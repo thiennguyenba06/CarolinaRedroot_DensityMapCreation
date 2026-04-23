@@ -32,9 +32,7 @@ def calculate_projection_error_vector(PARENT_DIR, corner_folder_dir):
 
 
 
-def calculate_shift_vector(PARENT_DIR, corner_folder_dir, actual_corners_vector):
-    corner_coors_path = [f for f in os.listdir(os.path.join(PARENT_DIR, corner_folder_dir)) if f.endswith(".txt")][0]
-    corner_coors_path = os.path.join(PARENT_DIR, corner_folder_dir, corner_coors_path)
+def calculate_shift_vector(corner_coors_path, actual_corners_vector):
     corners_vector = []
     with open(corner_coors_path, "r") as file:
         counter = 1
@@ -49,10 +47,3 @@ def calculate_shift_vector(PARENT_DIR, corner_folder_dir, actual_corners_vector)
     return np.mean(error_vector, axis=0)
     
 
-if __name__ == "__main__":
-    PARENT_DIR = "."
-    CORNER_FOLDER = "4_corners"
-    a = [[39.741633,-74.526192], [39.742623,-74.525837], [39.742997,-74.527282], [39.741752,-74.527700]]
-    a = np.array(a)
-    # print(a)
-    calculate_shift_vector(PARENT_DIR=PARENT_DIR, corner_folder_dir=CORNER_FOLDER, actual_corners_vector=a)

@@ -4,7 +4,10 @@ from shapely import Polygon, polygons
 # internal method
 def iou(box1: Polygon, box2: Polygon):
     """Calculate the Intersection over Union (IoU) of two polygons."""
-    return box1.intersection(box2).area / box1.union(box2).area
+    intersection = box1.intersection(box2).area
+    union = box1.area + box2.area - intersection
+    iou = intersection / union
+    return iou
 
 
 # global methods
