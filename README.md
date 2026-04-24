@@ -1,17 +1,17 @@
 # CarolinaRedroot_DensityMapCreation
 
 # Initial set up
-Create a python virtual environment\
+Create a python virtual environment
 ```bash
 python3 virutalenv <your_env_name>
 ```
 
-Activate the environment\
+Activate the environment
 ```bash
 source <your_env_name>/bin/activate
 ```
 
-Download libraries and dependencies\
+Download libraries and dependencies
 ```bash
 pip install -r requirements.txt
 ```
@@ -20,12 +20,12 @@ pip install -r requirements.txt
 
 ## Extract frames from video and do inference
 Run `extract.py`
-### path configurations for extract.py
+### Paths configurations for extract.py
 ```bash
 parent_dir = "./" # set to this directory, can be changed if needed
 data_dir = "YOUR VIDEO FOLDER DIRECTORY"
 ```
-Run `split_predict.py` to do inference on extracted images\
+Run `split_predict.py` to do inference on extracted images
 
 ## Create density map
 Run `densitymap.py` to create density map
