@@ -91,7 +91,7 @@ def process_video(video_path, srt_path, per_frame, output_dir, counter_start):
 if __name__ == "__main__":
     parent_dir = "./" # set to this directory, can be changed if needed
     data_dir = "YOUR VIDEO FOLDER DIRECTORY"
-    data_dir = os.path.join(parent_dir, "DJI_202507011226_138_PineIslandbog9H3m3x0video")
+    data_dir = os.path.join(parent_dir, data_dir)
     video_file_list = sorted([f for f in os.listdir(data_dir) if f.endswith(".MP4")])
     srt_file_list = sorted([f for f in os.listdir(data_dir) if f.endswith(".SRT")])
     for video, srt in zip(video_file_list, srt_file_list):

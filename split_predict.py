@@ -83,16 +83,16 @@ def divideImageImproved(image_name, parent_directory, image_folder_dir, weight_p
 
 
 if __name__ == "__main__":
-    parent_directory = "./" # default
-    weight_path = "best.pt" # default
-    parent_directory = (ans + "/" if (ans := input("Enter full path to parent directory (-1 for default path): ").strip()) != "-1" else "./")
-    image_folder_dir = input("Enter relative path to image folder: ").strip() + "/"
-    weight_path = (ans if (ans := input("Enter relative path to weight file (-1 for default path): ").strip()) != "-1" else "best.pt") 
+    # parent_directory = "./" # default
+    # weight_path = "best.pt" # default
+    # parent_directory = (ans + "/" if (ans := input("Enter full path to parent directory (-1 for default path): ").strip()) != "-1" else "./")
+    # image_folder_dir = input("Enter relative path to image folder: ").strip() + "/"
+    # weight_path = (ans if (ans := input("Enter relative path to weight file (-1 for default path): ").strip()) != "-1" else "best.pt") 
 
 
-    # parent_directory = "./"
-    # image_folder_dir = "geotagged_frames"
-    # weight_path = "best.pt"
+    parent_directory = "./"
+    image_folder_dir = "geotagged_frames"
+    weight_path = "best.pt"
     
     # model = ultralytics.YOLO(os.path.join(parent_directory, weight_path))
     images = os.listdir(os.path.join(parent_directory, image_folder_dir))

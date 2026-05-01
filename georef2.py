@@ -154,7 +154,7 @@ def get_image_corners(origin_path, img_path):
     LON1 = float(origin.read_xmp()['Xmp.drone-dji.GpsLongitude'])
     lat2 = float(img.read_xmp()['Xmp.drone-dji.GpsLatitude'])
     lon2 = float(img.read_xmp()['Xmp.drone-dji.GpsLongitude'])   
-    yaw = np.radians(90 - float(img.read_xmp()['Xmp.drone-dji.FlightYawDegree']))
+    yaw = np.radians(90 - float(origin.read_xmp()['Xmp.drone-dji.FlightYawDegree']))
     altitude = float(img.read_xmp()['Xmp.drone-dji.RelativeAltitude']) + 1  
     pitch = np.radians(float(img.read_xmp()['Xmp.drone-dji.GimbalPitchDegree']))    
     img_width = float(img.read_exif()['Exif.Photo.PixelXDimension'])

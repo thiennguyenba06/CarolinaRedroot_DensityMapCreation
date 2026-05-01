@@ -4,18 +4,18 @@ import matplotlib.pyplot as plt
 from shapely import Polygon, box, Point, STRtree, distance
 from concurrent.futures import ProcessPoolExecutor
 
-# setting up paths
-ORIGIN_PATH = "/Users/thiennguyenba/Documents/School/Research/Density_Video/geotagged_frames/frame_1.jpg" # to be changed depending on dataset
+# setting up paths and constants
+ORIGIN_PATH = "" # to be changed depending on dataset
 IMG_DIR = "geotagged_frames"
 LABEL_DIR = "output"
-CORNER_GPS_PATH = "/Users/thiennguyenba/Documents/School/Research/Density_Video/bog_calibration/bog9_calibrations.txt"
+CORNER_GPS_PATH = ""
 
 actual_corners_coors = [
-    [39.741628,-74.526122], 
-    [39.742633,-74.525784], 
-    [39.742924,-74.527282], 
-    [39.741753,-74.527658]
-    ] # obtain this from google earth
+    [39.745327,-74.521731], 
+    [39.745590,-74.520342], 
+    [39.746107,-74.520306], 
+    [39.745955,-74.521172]
+    ] # obtain this from google earth, to be changed accordingly
 actual_corners_coors = np.array(actual_corners_coors)
 SHIFT_VECTOR = shift_vector_module.calculate_shift_vector(
     corner_coors_path=CORNER_GPS_PATH, 
@@ -32,6 +32,7 @@ SPRAY_COORS_CSV = "spray_location.csv"
 SIDE_LENGTH_METERS = 1 # grid square side length in meters
 R_EARTH = 6378137.0  # Earth radius
 origin_gps = (float(pyexiv2.Image(ORIGIN_PATH).read_xmp()['Xmp.drone-dji.GpsLatitude']), float(pyexiv2.Image(ORIGIN_PATH).read_xmp()['Xmp.drone-dji.GpsLongitude']))
+yaw = np.radians(90 - float(pyexiv2.Image(ORIGIN_PATH).read_xmp().get('Xmp.drone-dji.FlightYawDegree')))
 
 
 img_list = sorted([f for f in os.listdir(IMG_DIR) if f.lower().endswith(".jpg")])
@@ -57,9 +58,17 @@ def process_img(img, label):
     mapped_list = georef2.georef(ORIGIN_PATH, img_path, label_path)
     vertices = georef2.get_image_corners(ORIGIN_PATH, img_path)
     polygon = Polygon(vertices)
-    lower_TL = [v*0.5 for v in vertices[0]]
-    lower_TR = [v*0.5 for v in vertices[1]] 
-    half_poly = Polygon([lower_TL, lower_TR, vertices[2], vertices[3]])
+    TL, TR, BR, BL = vertices
+    newTL = [
+        TL[0] + (BL[0] - TL[0])*0.5,
+        TL[1] + (BL[1] - TL[1])*0.5
+    ]
+ 
+    newTR = [
+        TR[0] + (BR[0] - TR[0])*0.5,
+        TR[1] + (BR[1] - TR[1])*0.5
+    ]
+    half_poly = Polygon([newTL, newTR, BR, BL])
 
 
     return {
@@ -77,9 +86,6 @@ def meters_to_gps(lat_origin, lon_origin, dx, dy, yaw_angle):
     dy: offset to the drone's forward (meters)
     yaw_angle: mathematical angle (radians, 0=East, CCW)
     """ 
-    # Standard rotation to align Body Frame (x=right, y=forward) 
-    # with Inertial Frame (East, North)
-    # Using the yaw_angle where 90 deg is North
     east_meter  = dx * np.sin(yaw_angle) + dy * np.cos(yaw_angle)
     north_meter = -dx * np.cos(yaw_angle) + dy * np.sin(yaw_angle)
 
@@ -133,7 +139,7 @@ if __name__ == "__main__":
         all_detections_coor.extend(result["mapped_list"])
         detections[result["img_id"]] = result["mapped_list"]
         image_bounds[result["img_id"]] = result["polygon"]
-        lower_half_image_bounds[result["polygon"]] = result["lower_half"]
+        lower_half_image_bounds[result["img_id"]] = result["lower_half"]
         img_fname_map[result["img_id"]] = result["img"]
         
     all_detections_coor = np.array(all_detections_coor) # convert list to numpy array for easier processing later
@@ -183,33 +189,8 @@ if __name__ == "__main__":
             possible_bounds = tree.query(cell_bounds) # 1d array of possible intersecting polygons (in any region)
 
             chosen_img = None
+            candidates = []
             if len(possible_bounds) != 0:
-                # choosing best image
-                # distances =  []
-                # for idx in possible_bounds:
-                #     img_id = id_list[idx]
-                #     polygon = image_bounds[img_id]
-                #     lower_half = lower_half_image_bounds[polygon]
-                #     poly_centroid = np.array([lower_half.centroid.x, lower_half.centroid.y])
-                #     dist = np.linalg.norm(cell_centroid - poly_centroid)
-                #     contestant = [img_id, dist]
-                #     distances.append(contestant)
-
-                # distances.sort(key=lambda x:x[1])
-
-                # for (id, dist) in distances:
-                #     lower_half = lower_half_image_bounds[image_bounds[id]]
-                #     if lower_half.contains(cell_bounds):
-                #         chosen_img = id
-                #         break
-                # if chosen_img is None:
-                #     for (id, dist) in distances:
-                #         polygon = image_bounds[id]
-                #         if polygon.contains(cell_bounds):
-                #             chosen_img = id
-                #             break
-
-                # choosing best image based on iou/dist
                 max_score = 0
                 for idx in possible_bounds:
                     img_id = id_list[idx]
@@ -217,32 +198,47 @@ if __name__ == "__main__":
                     intersection = polygon.intersection(cell_bounds).area
                     union = polygon.area + cell_bounds.area - intersection
                     iou = intersection / union
-                    # lower_half = lower_half_image_bounds[polygon]
-                    # poly_centroid = np.array([lower_half.centroid.x, lower_half.centroid.y])
-                    # dist = np.linalg.norm(cell_centroid - poly_centroid)
                     score = iou
-
-                    if score > max_score:
-                        chosen_img = img_id
-                        max_score = score
+                    candidates.append([img_id, iou])
                     
+                candidates.sort(key=lambda x : x[1], reverse=True)
+                
+
+                best_candidate = candidates[0]
+                chosen_img = best_candidate[0]
+                for i in range(1, len(candidates)):
+                    curr_candidate = candidates[i]
+                    if candidates[i][1] / (best_candidate[1] + 0.00001) > 0.8:
+                        break
+                    else:
+                        polygon = image_bounds[chosen_img]
+                        best_dist = distance(cell_bounds.centroid, polygon.centroid)
+
+                        polygon = lower_half_image_bounds[curr_candidate[0]]
+                        polygon = image_bounds[curr_candidate[0]]
+                        dist = distance(cell_bounds.centroid, polygon.centroid)
+                        
+                        if best_dist > dist:
+                            best_candidate = candidates[i]
+                            chosen_img = best_candidate[0]
+
                 if chosen_img is None:
                     continue
 
                 points = detections[chosen_img]
                 # print(f"{img_id}: {np.ndim(points)}")
                 if points.ndim != 2:
-                    print(f"Warning: No detections found for image {img_id}. Skipping this cell.")
-                    continue
-                is_in_x = (points[:,0] >= left) & (points[:,0] <= right)
-                is_in_y = (points[:,1] >= down) & (points[:,1] <= up)
-                count = np.count_nonzero(is_in_x & is_in_y)
-                density = count / SIDE_LENGTH_METERS**2  # density per square meter
-                density_grid[y_idx, x_idx] = density
+                    # print(f"Warning: No detections found for image {img_id}.")
+                    density = 0
+                else:
+                    is_in_x = (points[:,0] >= left) & (points[:,0] <= right)
+                    is_in_y = (points[:,1] >= down) & (points[:,1] <= up)
+                    count = np.count_nonzero(is_in_x & is_in_y)
+                    density = count / SIDE_LENGTH_METERS**2  # density per square meter
+                    density_grid[y_idx, x_idx] = density
 
                 # map cell center to GPS 
                 xmp_data = pyexiv2.Image(os.path.join(IMG_DIR, img_fname_map[chosen_img])).read_xmp()
-                yaw = np.radians(90 - float(xmp_data.get('Xmp.drone-dji.FlightYawDegree')))
                 gps = meters_to_gps(origin_gps[0], origin_gps[1], cell_center_x, cell_center_y, yaw)
                 drone_gps = (float(xmp_data['Xmp.drone-dji.GpsLatitude']), float(xmp_data['Xmp.drone-dji.GpsLongitude']))
                 displacement = find_displacement(drone_gps=drone_gps, point_gps=gps, yaw=yaw)
